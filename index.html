@@ -1,0 +1,246 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Load a basic WebMap | Sample | ArcGIS API for JavaScript 4.23</title>
+
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+      .esri-ui-top-left {
+        width: 100% !important;
+      }
+      .esri-search {
+        width: 100% !important;
+      }
+    </style>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.23/esri/themes/dark/main.css" />
+
+    <script src="https://js.arcgis.com/4.23/"></script>
+<script type="module" src="https://js.arcgis.com/calcite-components/1.0.0-beta.81/calcite.esm.js"></script>
+<link rel="stylesheet" type="text/css" href="https://js.arcgis.com/calcite-components/1.0.0-beta.81/calcite.css" />
+    <script>
+
+   require([
+  "esri/views/MapView",
+  "esri/WebMap",
+  "esri/geometry/geometryEngine",
+  "esri/rest/locator",
+  "esri/Graphic",
+  "esri/popup/content/CustomContent",
+  "esri/widgets/Search",
+  "esri/widgets/Search/LayerSearchSource",
+  "esri/widgets/Search/LocatorSearchSource"
+], (
+  MapView,
+  WebMap,
+  geometryEngine,
+  locator,
+  Graphic,
+  CustomContent,
+  Search,
+  LayerSearchSource,
+  LocatorSearchSource
+) => {
+  
+  document.getElementById('modalClose').onclick = () => {
+    document.getElementById('modal').removeAttribute('active');
+  };
+  const setTemplate = () => {
+    return {
+      title: "{address}",
+      content: [
+        new CustomContent({
+          creator: function () {
+            const btn = document.createElement("calcite-button");
+            btn.innerHTML = "REPORT STREET PREFORMER";
+            btn.scale = "l";
+            btn.width = "full";
+            btn.setAttribute('icon-end', 'launch');
+            btn.onclick = () => {
+              window.open(
+                `https://survey123.arcgis.com/share/c978f1432c5e42f8b2ff6518ce5ad55d?field:noise_source=Street Performer&center=${view.popup.selectedFeature.geometry.latitude},${view.popup.selectedFeature.geometry.longitude}`,
+                "_blank"
+              );
+            };
+            return btn;
+          }
+        }),
+        new CustomContent({
+          creator: function () {
+            const btn = document.createElement("calcite-button");
+            btn.innerHTML = "REPORT VEHICLE";
+            btn.scale = "l";
+            btn.width = "full";
+            btn.setAttribute('icon-end', 'launch');            
+            btn.onclick = () => {
+              window.open(
+                `https://survey123.arcgis.com/share/c978f1432c5e42f8b2ff6518ce5ad55d?field:noise_source=Vehicle&center=${view.popup.selectedFeature.geometry.latitude},${view.popup.selectedFeature.geometry.longitude}`,
+                "_blank"
+              );
+            };
+            return btn;
+          }
+        })
+      ]
+    };
+  };
+  const webmap = new WebMap({
+    portalItem: {
+      // autocasts as new PortalItem()
+      id: "95e05d4542bf490fba0a97bb5135d7d3"
+    }
+  });
+
+  const view = new MapView({
+    map: webmap,
+    container: "viewDiv",
+    constraints: { minZoom: 15 },
+    popup: { collapsedEnabled: false }
+  });
+  view.when(() => {
+    view.popup.watch("collapsed", function (value) {
+      view.popup.collapsed = false;
+    });
+    const businesses = view.map.layers.find((layer) => {
+      return layer.title == "Businesses";
+    });
+    if (businesses) {
+      businesses.popupTemplate.content.push(
+        new CustomContent({
+          creator: function () {
+            const btn = document.createElement("calcite-button");
+            btn.innerHTML = "REPORT BUSINESS";
+            btn.scale = "l";
+            btn.width = "full";
+            btn.setAttribute('icon-end', 'launch');            
+            btn.onclick = () => {
+              window.open(
+                `https://survey123.arcgis.com/share/c978f1432c5e42f8b2ff6518ce5ad55d?field:noise_source=Business&field:business_name=${view.popup.selectedFeature.attributes.ESTABLISHMENT}&center=${view.popup.selectedFeature.geometry.latitude},${view.popup.selectedFeature.geometry.longitude}`,
+                "_blank"
+              );
+            };
+            return btn;
+          }
+        })
+      );
+    }
+    view.ui.remove("zoom");
+
+    const search = new Search({
+      view: view,
+      includeDefaultSources: false,
+      popupEnabled: false,
+      placeholder: 'Search for business or address',
+      sources: [
+          new LayerSearchSource({
+          layer: businesses,
+          orderByFields: ["ESTABLISHMENT"],
+          searchFields: ["ESTABLISHMENT"],
+          placeholder: "Search for business"
+        })
+      ]
+    });
+    search.on("search-complete", (result) => {
+      let graphic = null;
+      if (result.results.length) {
+        if (result.results[0].sourceIndex === 1) {
+          graphic = new Graphic({
+            geometry: result.results[0].results[0].feature.geometry,
+            attributes: {
+              address: result.results[0].results[0].name
+            }, popupTemplate: setTemplate()
+          });
+        }
+        if (result.results[0].sourceIndex === 0) {
+          graphic = new Graphic({
+            geometry: result.results[0].results[0].feature.geometry,
+            attributes: result.results[0].results[0].feature.attributes, 
+            popupTemplate: businesses.popupTemplate
+          });
+        }        
+      } 
+      view.popup.open({location: graphic.geometry, features: [graphic]});
+    });
+    const district = view.map.layers.find((layer) => {
+      return layer.title == "District";
+    });
+    district.queryExtent({where: '1=1', outSpatialReference: {wkid: 4326}}).then((extent) => {
+      search.sources.push(
+        new LocatorSearchSource({
+          url:
+        "https://utility.arcgis.com/usrsvcs/servers/d56a8749b05b417e843d05133ef33a7c/rest/services/World/GeocodeServer",
+          placeholder: "Search by address"
+        })
+      );
+    });
+    view.ui.add(search, {
+      position: "top-left"
+    });
+    view.map.layers.forEach((layer) => {
+      if (layer.title == "District") {
+        layer.queryFeatures().then((fs) => {
+          view.constraints.geometry = fs.features[0].geometry;
+          view.on("click", (mapPoint) => {
+            view
+              .hitTest(mapPoint.screenPoint, { include: businesses })
+              .then((result) => {
+                console.log(result);
+                if (!result.results.length) {
+                  if (
+                    geometryEngine.within(
+                      mapPoint.mapPoint,
+                      view.constraints.geometry
+                    )
+                  ) {
+                    locator
+                      .locationToAddress(
+                        "https://utility.arcgis.com/usrsvcs/servers/d56a8749b05b417e843d05133ef33a7c/rest/services/World/GeocodeServer",
+                        { location: mapPoint.mapPoint, locationType: "street" }
+                      )
+                      .then((result) => {
+                        const graphic = new Graphic({
+                          geometry: mapPoint.mapPoint,
+                          attributes: {
+                            address: result.attributes.Address
+                          },
+                          popupTemplate: setTemplate()
+                        });
+                        view.popup.open({
+                          location: mapPoint.mapPoint,
+                          features: [graphic]
+                        });
+                      });
+                  }
+                }
+              });
+          });
+        });
+      }
+    });
+  });
+});
+
+    </script>
+  </head>
+
+  <body  class="calcite-theme-dark">
+    <div id="viewDiv"></div>
+    <calcite-modal id="modal" aria-labelledby="modal-title" active>
+        <div slot="header" id="modal-title">Noise Complaint Feedback</div>
+        <div slot="content">
+<p>This form is specifically for feedback regarding sound within the City of Raleigh’s Hospitality District.  Submission of this form does not trigger a police response. <strong>For a police response, call the non-emergency number at 919-831-6311.</strong></p>
+          
+          <p>To report a noise complaint at a business, select the business on the map or use the search bar at the top.  To report a noise complaint concerning a vehicle or street preformer, click on the map or use the search bar at the top. Then click on the report button in the popup window and you will be directed to the survey.</p></div>
+
+        <calcite-button id="modalClose" slot="primary" width="full">Continue</calcite-button>
+    </calcite-modal>    
+  </body>
+</html> 
