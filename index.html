@@ -2,7 +2,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-    <title>Load a basic WebMap | Sample | ArcGIS API for JavaScript 4.23</title>
+    <title>Noise Complaint Form Map</title>
 
     <style>
       html,
@@ -37,7 +37,8 @@
   "esri/popup/content/CustomContent",
   "esri/widgets/Search",
   "esri/widgets/Search/LayerSearchSource",
-  "esri/widgets/Search/LocatorSearchSource"
+  "esri/widgets/Search/LocatorSearchSource",
+  "esri/symbols/WebStyleSymbol"
 ], (
   MapView,
   WebMap,
@@ -47,12 +48,15 @@
   CustomContent,
   Search,
   LayerSearchSource,
-  LocatorSearchSource
+  LocatorSearchSource,
+  WebStyleSymbol
 ) => {
   
   document.getElementById('modalClose').onclick = () => {
     document.getElementById('modal').removeAttribute('active');
   };
+
+
   const setTemplate = () => {
     return {
       title: "{address}",
@@ -138,7 +142,7 @@
       view: view,
       includeDefaultSources: false,
       popupEnabled: false,
-      placeholder: 'Search for business or address',
+      allPlaceholder: 'Search for business or address',
       sources: [
           new LayerSearchSource({
           layer: businesses,
@@ -148,8 +152,22 @@
         })
       ]
     });
+    let pointSymbol = null;
+    new WebStyleSymbol({
+      name: "tear-pin-2",
+      styleName: "Esri2DPointSymbolsStyle"
+    }).fetchCIMSymbol().then(symbol => {
+      symbol.data.symbol.symbolLayers[0].size = 9.729;
+      symbol.data.symbol.symbolLayers[1].size = 30;
+      symbol.data.symbol.symbolLayers[1].markerGraphics[0].symbol.symbolLayers[1].color = [255, 64, 64, 255];
+      pointSymbol = symbol;
+      search.viewModel.defaultSymbols.point = symbol;
+    });
+
+
     search.on("search-complete", (result) => {
       let graphic = null;
+      view.graphics.removeAll();
       if (result.results.length) {
         if (result.results[0].sourceIndex === 1) {
           graphic = new Graphic({
@@ -167,6 +185,7 @@
           });
         }        
       } 
+
       view.popup.open({location: graphic.geometry, features: [graphic]});
     });
     const district = view.map.layers.find((layer) => {
@@ -206,13 +225,18 @@
                         { location: mapPoint.mapPoint, locationType: "street" }
                       )
                       .then((result) => {
+                      console.log(pointSymbol)
                         const graphic = new Graphic({
                           geometry: mapPoint.mapPoint,
                           attributes: {
                             address: result.attributes.Address
                           },
+                          symbol: pointSymbol,
                           popupTemplate: setTemplate()
                         });
+                        view.graphics.removeAll();
+                        view.graphics.add(graphic);
+                      
                         view.popup.open({
                           location: mapPoint.mapPoint,
                           features: [graphic]
@@ -244,3 +268,5 @@
     </calcite-modal>    
   </body>
 </html> 
+
+
